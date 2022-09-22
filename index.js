@@ -1,7 +1,7 @@
 const logger = require('@vue/cli-shared-utils')
 const webpack = require('webpack')
 const CopyWebpackPlugin = require('copy-webpack-plugin')
-const ExtensionReloader = require('webpack-extension-reloader')
+const ExtensionReloader = require('./lib/webpack-extension-reloader')
 const ZipPlugin = require('zip-webpack-plugin')
 const { keyExists } = require('./lib/signing-key')
 const manifestTransformer = require('./lib/manifest')
@@ -10,12 +10,12 @@ const defaultOptions = {
   componentOptions: {},
   extensionReloaderOptions: {},
   manifestSync: ['version'],
-  manifestTransformer: null
+  manifestTransformer: null,
 }
 const performanceAssetFilterList = [
   (file) => !/\.map$/.test(file),
   (file) => !file.endsWith('.zip'),
-  (file) => !/^icons\//.test(file)
+  (file) => !/^icons\//.test(file),
 ]
 
 module.exports = (api, options) => {
@@ -57,8 +57,12 @@ module.exports = (api, options) => {
   api.chainWebpack((webpackConfig) => {
     const isLegacyBundle = process.env.VUE_CLI_MODERN_MODE && !process.env.VUE_CLI_MODERN_BUILD
     // Ignore rewriting names for background and content scripts
-    webpackConfig.output.filename((file) =>
-      `js/[name]${isLegacyBundle ? `-legacy` : ``}${isProduction && options.filenameHashing && !userScripts.includes(file.chunk.name) ? '.[contenthash:8]' : ''}.js`
+    webpackConfig.output.filename(
+      (file) =>
+        `js/[name]${isLegacyBundle ? `-legacy` : ``}${
+          isProduction && options.filenameHashing && !userScripts.includes(file.chunk.name) ? '.[contenthash:8]' : ''
+        }.js`
+      // `${file.chunk.name === 'background' ? '' : 'js/'}[name]${isLegacyBundle ? `-legacy` : ``}${isProduction && options.filenameHashing && !userScripts.includes(file.chunk.name) ? '.[contenthash:8]' : ''}.js`
     )
     webpackConfig.merge({ entry })
 
@@ -67,15 +71,15 @@ module.exports = (api, options) => {
         {
           from: './src/manifest.json',
           to: 'manifest.json',
-          transform: manifestTransformer(api, pluginOptions, packageJson)
-        }
-      ]
+          transform: manifestTransformer(api, pluginOptions, packageJson),
+        },
+      ],
     ])
 
     webpackConfig.plugin('provide-webextension-polyfill').use(webpack.ProvidePlugin, [
       {
-        browser: 'webextension-polyfill'
-      }
+        browser: 'webextension-polyfill',
+      },
     ])
 
     // Workaround for https://github.com/mozilla/webextension-polyfill/issues/68
@@ -105,7 +109,7 @@ module.exports = (api, options) => {
         filename = pluginOptions.artifactFilename({
           name: packageJson.name,
           version: packageJson.version,
-          mode: api.service.mode
+          mode: api.service.mode,
         })
       } else {
         filename = `${packageJson.name}-v${packageJson.version}-${api.service.mode}.zip`
@@ -113,8 +117,8 @@ module.exports = (api, options) => {
       webpackConfig.plugin('zip-browser-extension').use(ZipPlugin, [
         {
           path: api.resolve(pluginOptions.artifactsDir || 'artifacts'),
-          filename: filename
-        }
+          filename: filename,
+        },
       ])
     }
 
@@ -125,7 +129,7 @@ module.exports = (api, options) => {
     }
 
     if (webpackConfig.plugins.has('copy')) {
-      webpackConfig.plugin('copy').tap(args => {
+      webpackConfig.plugin('copy').tap((args) => {
         args[0][0].ignore.push('browser-extension.html')
         return args
       })
@@ -134,7 +138,11 @@ module.exports = (api, options) => {
 
   api.configureWebpack((webpackConfig) => {
     const omitUserScripts = ({ name }) => !userScripts.includes(name)
-    if (webpackConfig.optimization && webpackConfig.optimization.splitChunks && webpackConfig.optimization.splitChunks.cacheGroups) {
+    if (
+      webpackConfig.optimization &&
+      webpackConfig.optimization.splitChunks &&
+      webpackConfig.optimization.splitChunks.cacheGroups
+    ) {
       if (webpackConfig.optimization.splitChunks.cacheGroups.vendors) {
         webpackConfig.optimization.splitChunks.cacheGroups.vendors.chunks = omitUserScripts
       }
